@@ -1,6 +1,9 @@
-# Emergency Hub Media Server
+# TinyMedia — Lightweight Mobile Media Server
 
-Lightweight file browser and media streamer for Raspberry Pi / Orange Pi.
+A tiny, lightweight file and media server designed to run on low-powered boards
+like Raspberry Pi or Orange Pi and to be easily accessed from a cellphone.
+It provides a simple browser UI for browsing folders, streaming video/audio
+in the browser, downloading, uploading, and creating folders on local storage.
 
 ## Features
 
@@ -67,18 +70,18 @@ Pre-transcode for universal browser playback:
 
 ## Systemd Service (auto-start)
 
-Create `/etc/systemd/system/media-server.service`:
+Create `/etc/systemd/system/tinymedia.service` to auto-start the server:
 
 ```ini
 [Unit]
-Description=Emergency Hub Media Server
+Description=TinyMedia Lightweight Media Server
 After=network.target
 
 [Service]
 Type=simple
 User=pi
 Environment=MEDIA_ROOT=/media/usb
-WorkingDirectory=/home/pi/media_server
+WorkingDirectory=/home/pi/tinymedia
 ExecStart=/usr/bin/python3 server.py
 Restart=always
 
@@ -89,6 +92,6 @@ WantedBy=multi-user.target
 Then:
 
 ```bash
-sudo systemctl enable media-server
-sudo systemctl start media-server
+sudo systemctl enable tinymedia
+sudo systemctl start tinymedia
 ```
