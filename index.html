@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Emergency Hub - Media</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        :root {
+            --bg: #1a1a2e;
+            --surface: #16213e;
+            --primary: #0f3460;
+            --accent: #e94560;
+            --text: #eee;
+            --text-dim: #aaa;
+            --success: #4ade80;
+            --border: #2a2a4a;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding-bottom: 80px;
+        }
+        
+        header {
+            background: var(--surface);
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .breadcrumbs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+            font-size: 0.875rem;
+        }
+        
+        .breadcrumbs a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        
+        .breadcrumbs span {
+            color: var(--text-dim);
+        }
+        
+        .storage {
+            background: var(--primary);
+            padding: 0.75rem 1rem;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+        
+        .storage-bar {
+            background: var(--bg);
+            height: 6px;
+            border-radius: 3px;
+            margin-top: 0.5rem;
+            overflow: hidden;
+        }
+        
+        .storage-bar-fill {
+            background: var(--accent);
+            height: 100%;
+            transition: width 0.3s;
+        }
+        
+        .items {
+            padding: 0.5rem;
+        }
+        
+        .item {
+            display: flex;
+            align-items: center;
+            padding: 0.875rem;
+            background: var(--surface);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: var(--text);
+            transition: background 0.2s;
+        }
+        
+        .item:active {
+            background: var(--primary);
+        }
+        
+        .item-icon {
+            font-size: 1.5rem;
+            width: 40px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        
+        .item-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .item-name {
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .item-meta {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            margin-top: 0.125rem;
+        }
+        
+        .item-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            border: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            transition: opacity 0.2s;
+        }
+        
+        .btn:active {
+            opacity: 0.7;
+        }
+        
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: var(--primary);
+            color: var(--text);
+        }
+        
+        .btn-icon {
+            padding: 0.5rem;
+            min-width: 40px;
+        }
+        
+        .empty {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-dim);
+        }
+        
+        .fab-container {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            z-index: 100;
+        }
+        
+        .fab {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        
+        .fab-upload {
+            background: var(--accent);
+            color: white;
+        }
+        
+        .fab-folder {
+            background: var(--primary);
+            color: white;
+        }
+        
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+        }
+        
+        .modal {
+            background: var(--surface);
+            border-radius: 12px;
+            width: 100%;
+            max-width: 400px;
+            overflow: hidden;
+        }
+        
+        .modal-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+        }
+        
+        .modal-body {
+            padding: 1rem;
+        }
+        
+        .modal-footer {
+            padding: 1rem;
+            display: flex;
+            gap: 0.5rem;
+            justify-content: flex-end;
+            border-top: 1px solid var(--border);
+        }
+        
+        input[type="text"], input[type="file"] {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 1rem;
+        }
+        
+        input[type="file"] {
+            padding: 0.5rem;
+        }
+        
+        .progress {
+            display: none;
+            margin-top: 1rem;
+        }
+        
+        .progress.active {
+            display: block;
+        }
+        
+        .progress-bar {
+            background: var(--bg);
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-bar-fill {
+            background: var(--success);
+            height: 100%;
+            width: 0%;
+            transition: width 0.2s;
+        }
+        
+        .progress-text {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            margin-top: 0.5rem;
+        }
+        
+        /* Video/Audio Player Modal */
+        .player-modal {
+            max-width: 100%;
+            width: 100%;
+            max-height: 90vh;
+        }
+        
+        .player-modal video,
+        .player-modal audio {
+            width: 100%;
+            max-height: 70vh;
+            background: black;
+        }
+        
+        .player-modal audio {
+            margin: 2rem 0;
+        }
+        
+        .player-title {
+            padding: 1rem;
+            text-align: center;
+            font-weight: 500;
+        }
+        
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--surface);
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 300;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .toast.active {
+            opacity: 1;
+        }
+        
+        .toast.success {
+            border-left: 4px solid var(--success);
+        }
+        
+        .toast.error {
+            border-left: 4px solid var(--accent);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>📡 Emergency Hub</h1>
+        <nav class="breadcrumbs">
+            {% for crumb in breadcrumbs %}
+                {% if not loop.last %}
+                    <a href="{{ url_for('browse', subpath=crumb.path) }}">{{ crumb.name }}</a>
+                    <span>/</span>
+                {% else %}
+                    <span>{{ crumb.name }}</span>
+                {% endif %}
+            {% endfor %}
+        </nav>
+    </header>
+    
+    {% if storage %}
+    <div class="storage">
+        <div>{{ storage.used }} used of {{ storage.total }} ({{ storage.free }} free)</div>
+        <div class="storage-bar">
+            <div class="storage-bar-fill" style="width: {{ storage.percent }}%"></div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <main class="items">
+        {% if items %}
+            {% for item in items %}
+                {% if item.is_dir %}
+                    <a href="{{ url_for('browse', subpath=(current_path + '/' + item.name) if current_path else item.name) }}" class="item">
+                        <div class="item-icon">📁</div>
+                        <div class="item-info">
+                            <div class="item-name">{{ item.name }}</div>
+                            <div class="item-meta">Folder</div>
+                        </div>
+                    </a>
+                {% else %}
+                    <div class="item" data-file="{{ item.name }}" data-type="{{ item.type }}" data-mime="{{ item.mime }}">
+                        <div class="item-icon">
+                            {% if item.type == 'video' %}🎬
+                            {% elif item.type == 'audio' %}🎵
+                            {% elif item.type == 'image' %}🖼️
+                            {% elif item.type == 'document' %}📄
+                            {% else %}📦{% endif %}
+                        </div>
+                        <div class="item-info">
+                            <div class="item-name">{{ item.name }}</div>
+                            <div class="item-meta">{{ item.size_human }}</div>
+                        </div>
+                        <div class="item-actions">
+                            {% if item.type in ['video', 'audio'] %}
+                                <button class="btn btn-primary btn-icon play-btn" title="Play">▶</button>
+                            {% endif %}
+                            <a href="{{ url_for('download', subpath=(current_path + '/' + item.name) if current_path else item.name) }}" class="btn btn-secondary btn-icon" title="Download">⬇</a>
+                        </div>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        {% else %}
+            <div class="empty">
+                <p>📂 This folder is empty</p>
+            </div>
+        {% endif %}
+    </main>
+    
+    <div class="fab-container">
+        <button class="fab fab-folder" onclick="showFolderModal()" title="New Folder">📁</button>
+        <button class="fab fab-upload" onclick="showUploadModal()" title="Upload">⬆</button>
+    </div>
+    
+    <!-- Upload Modal -->
+    <div class="modal-overlay" id="uploadModal">
+        <div class="modal">
+            <div class="modal-header">Upload File</div>
+            <div class="modal-body">
+                <input type="file" id="fileInput" multiple>
+                <div class="progress" id="uploadProgress">
+                    <div class="progress-bar">
+                        <div class="progress-bar-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">Uploading...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="hideModals()">Cancel</button>
+                <button class="btn btn-primary" onclick="uploadFiles()">Upload</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- New Folder Modal -->
+    <div class="modal-overlay" id="folderModal">
+        <div class="modal">
+            <div class="modal-header">New Folder</div>
+            <div class="modal-body">
+                <input type="text" id="folderName" placeholder="Folder name">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="hideModals()">Cancel</button>
+                <button class="btn btn-primary" onclick="createFolder()">Create</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Player Modal -->
+    <div class="modal-overlay" id="playerModal">
+        <div class="modal player-modal">
+            <div class="player-title" id="playerTitle"></div>
+            <div id="playerContainer"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="hideModals()">Close</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+    
+    <script>
+        const currentPath = "{{ current_path }}";
+        
+        function showUploadModal() {
+            document.getElementById('uploadModal').classList.add('active');
+            document.getElementById('fileInput').value = '';
+            document.getElementById('uploadProgress').classList.remove('active');
+        }
+        
+        function showFolderModal() {
+            document.getElementById('folderModal').classList.add('active');
+            document.getElementById('folderName').value = '';
+            document.getElementById('folderName').focus();
+        }
+        
+        function hideModals() {
+            document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
+            // Stop any playing media
+            document.getElementById('playerContainer').innerHTML = '';
+        }
+        
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast active ' + type;
+            setTimeout(() => toast.classList.remove('active'), 3000);
+        }
+        
+        async function uploadFiles() {
+            const input = document.getElementById('fileInput');
+            const files = input.files;
+            
+            if (files.length === 0) {
+                showToast('Please select a file', 'error');
+                return;
+            }
+            
+            const progress = document.getElementById('uploadProgress');
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            
+            progress.classList.add('active');
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                progressText.textContent = `Uploading ${file.name} (${i + 1}/${files.length})...`;
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    const xhr = new XMLHttpRequest();
+                    
+                    await new Promise((resolve, reject) => {
+                        xhr.upload.onprogress = (e) => {
+                            if (e.lengthComputable) {
+                                const pct = (e.loaded / e.total) * 100;
+                                progressFill.style.width = pct + '%';
+                            }
+                        };
+                        
+                        xhr.onload = () => {
+                            if (xhr.status === 200) {
+                                resolve(JSON.parse(xhr.responseText));
+                            } else {
+                                reject(new Error('Upload failed'));
+                            }
+                        };
+                        
+                        xhr.onerror = () => reject(new Error('Network error'));
+                        
+                        const uploadPath = currentPath ? `/upload/${currentPath}` : '/upload/';
+                        xhr.open('POST', uploadPath);
+                        xhr.send(formData);
+                    });
+                    
+                } catch (err) {
+                    showToast(`Failed to upload ${file.name}`, 'error');
+                    progress.classList.remove('active');
+                    return;
+                }
+            }
+            
+            showToast(`Uploaded ${files.length} file(s)`);
+            hideModals();
+            location.reload();
+        }
+        
+        async function createFolder() {
+            const name = document.getElementById('folderName').value.trim();
+            
+            if (!name) {
+                showToast('Please enter a folder name', 'error');
+                return;
+            }
+            
+            try {
+                const mkdirPath = currentPath ? `/mkdir/${currentPath}` : '/mkdir/';
+                const res = await fetch(mkdirPath, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast(`Created folder: ${data.name}`);
+                    hideModals();
+                    location.reload();
+                } else {
+                    showToast(data.error, 'error');
+                }
+            } catch (err) {
+                showToast('Failed to create folder', 'error');
+            }
+        }
+        
+        function playMedia(filename, type, mime) {
+            const modal = document.getElementById('playerModal');
+            const container = document.getElementById('playerContainer');
+            const title = document.getElementById('playerTitle');
+            
+            title.textContent = filename;
+            
+            const streamPath = currentPath ? `/stream/${currentPath}/${filename}` : `/stream/${filename}`;
+            
+            if (type === 'video') {
+                container.innerHTML = `<video controls autoplay playsinline>
+                    <source src="${streamPath}" type="${mime}">
+                    Your browser doesn't support video playback.
+                </video>`;
+            } else if (type === 'audio') {
+                container.innerHTML = `<audio controls autoplay>
+                    <source src="${streamPath}" type="${mime}">
+                    Your browser doesn't support audio playback.
+                </audio>`;
+            }
+            
+            modal.classList.add('active');
+        }
+        
+        // Event delegation for play buttons
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('play-btn')) {
+                const item = e.target.closest('.item');
+                const filename = item.dataset.file;
+                const type = item.dataset.type;
+                const mime = item.dataset.mime;
+                playMedia(filename, type, mime);
+            }
+        });
+        
+        // Close modals on backdrop click
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    hideModals();
+                }
+            });
+        });
+        
+        // Enter key for folder creation
+        document.getElementById('folderName').addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') createFolder();
+        });
+    </script>
+</body>
+</html>
