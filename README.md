@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # TinyMedia — Lightweight Mobile Media Server
+=======
+# Tinymedia
+>>>>>>> 928081ff9e3bc63cf97d11734219ae67571ec6f0
 
 A tiny, lightweight file and media server designed to run on low-powered boards
 like Raspberry Pi or Orange Pi and to be easily accessed from a cellphone.
