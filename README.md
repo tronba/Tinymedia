@@ -65,6 +65,39 @@ pip install gunicorn
 gunicorn -w 2 -b 0.0.0.0:5000 server:app
 ```
 
+## Quick install (from git)
+
+If you fetched this repository with `git`, the `scripts/` folder includes helper scripts to get TinyMedia running quickly on a Raspberry Pi or Windows machine.
+
+- Unix (Raspbian, Debian, Ubuntu, Orange Pi):
+
+```bash
+git clone <repo-url>
+cd Tinymedia
+sudo scripts/install.sh
+```
+
+The installer will create a `venv` inside the project, install dependencies, prompt for a `MEDIA_ROOT`, and set up a `systemd` service named `tinymedia`.
+
+- Run manually (Unix):
+
+```bash
+cd Tinymedia
+./scripts/run.sh
+```
+
+- Windows (PowerShell):
+
+```powershell
+git clone <repo-url>
+cd Tinymedia
+.\scripts\run.ps1
+```
+
+Notes:
+- The server listens on port `5000` by default. Open `http://<device-ip>:5000` from your phone while on the same network.
+- For production deployments consider using `gunicorn` or another WSGI server and put the app behind a reverse proxy.
+
 ## Recommended Media Formats
 
 Pre-transcode for universal browser playback:
