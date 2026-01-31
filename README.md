@@ -1,4 +1,4 @@
-# Emergency Hub Media Server
+# Tinymedia
 
 Lightweight file browser and media streamer for Raspberry Pi / Orange Pi.
 
