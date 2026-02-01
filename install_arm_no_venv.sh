@@ -168,8 +168,8 @@ if [[ ! "$yn" =~ ^[Yy]$ ]]; then
 fi
 
 echo "Installing Python dependencies with pip3..."
-python3 -m pip install --upgrade --user pip
-python3 -m pip install --user Flask gunicorn
+python3 -m pip install --upgrade --user --break-system-packages pip
+python3 -m pip install --user --break-system-packages Flask gunicorn
 
 SERVICE_FILE="/etc/systemd/system/tinymedia.service"
 echo "Writing systemd service to $SERVICE_FILE (requires sudo)..."
