@@ -145,10 +145,12 @@ def browse(subpath, full_path):
     
     # List folder contents
     items = []
+    # System folders to hide (common Windows/system folders)
+    hidden_folders = {'System Volume Information', '$RECYCLE.BIN', 'Thumbs.db', '.Trashes', '.Spotlight-V100'}
     try:
         for entry in sorted(full_path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
-            if entry.name.startswith('.'):
-                continue  # Skip hidden files
+            if entry.name.startswith('.') or entry.name in hidden_folders:
+                continue  # Skip hidden files and system folders
             items.append(get_file_info(entry))
     except PermissionError:
         abort(403)
