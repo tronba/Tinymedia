@@ -34,8 +34,8 @@ command -v python3 >/dev/null 2>&1 || {
 echo "Detecting mounted removable USB drives..."
 
 # Use lsblk to list removable devices with mountpoints. Include FSTYPE/LABEL/SIZE so choices are informative.
-# Filter for partitions only (exclude parent devices) and require non-empty FSTYPE and MOUNTPOINT
-mapfile -t candidates < <(lsblk -P -o NAME,RM,FSTYPE,LABEL,MOUNTPOINT,SIZE | awk -F' ' '$0 ~ /RM="1"/ && $0 ~ /FSTYPE="[^"]+/ && $0 ~ /MOUNTPOINT="[^"]+/ {print $0}')
+# Filter for removable devices that have both a filesystem type and are mounted
+mapfile -t candidates < <(lsblk -P -o NAME,RM,FSTYPE,LABEL,MOUNTPOINT,SIZE | awk -F' ' '$0 ~ /RM="1"/ && $0 !~ /FSTYPE=""/ && $0 !~ /MOUNTPOINT=""/ {print $0}')
 
 if [ ${#candidates[@]} -eq 0 ]; then
   echo "No mounted removable USB drives detected. Please mount your USB drive and re-run." >&2
