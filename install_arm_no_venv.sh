@@ -33,8 +33,8 @@ command -v python3 >/dev/null 2>&1 || {
 
 echo "Detecting mounted removable USB drives..."
 
-# Use lsblk to list removable devices with mountpoints. Parse simple KEY=VAL output.
-mapfile -t candidates < <(lsblk -o NAME,RM,MOUNTPOINT -P | awk -F' ' '$0 ~ /RM="1"/ && $0 ~ /MOUNTPOINT="/ {print $0}')
+# Use lsblk to list removable devices with mountpoints. Include FSTYPE/LABEL/SIZE so choices are informative.
+mapfile -t candidates < <(lsblk -P -o NAME,RM,FSTYPE,LABEL,MOUNTPOINT,SIZE | awk -F' ' '$0 ~ /RM="1"/ && $0 ~ /MOUNTPOINT="/ {print $0}')
 
 if [ ${#candidates[@]} -eq 0 ]; then
   echo "No mounted removable USB drives detected. Please mount your USB drive and re-run." >&2
@@ -44,18 +44,36 @@ fi
 
 if [ ${#candidates[@]} -gt 1 ]; then
   echo "Multiple removable mounts detected:" >&2
+  # build list of exfat candidates to prefer automatically
+  declare -a exfat_idxs=()
   for i in "${!candidates[@]}"; do
     entry=${candidates[$i]}
-    # extract MOUNTPOINT value
-    mp=$(echo "$entry" | sed -n 's/.*MOUNTPOINT="\([^"]*\)".*/\1/p')
-    echo "  [$i] $mp"
+    name=$(echo "$entry" | sed -n 's/.*NAME="\([^\"]*\)".*/\1/p')
+    fstype=$(echo "$entry" | sed -n 's/.*FSTYPE="\([^\"]*\)".*/\1/p')
+    label=$(echo "$entry" | sed -n 's/.*LABEL="\([^\"]*\)".*/\1/p')
+    size=$(echo "$entry" | sed -n 's/.*SIZE="\([^\"]*\)".*/\1/p')
+    mp=$(echo "$entry" | sed -n 's/.*MOUNTPOINT="\([^\"]*\)".*/\1/p')
+    tag=""
+    if [ "$fstype" = "exfat" ]; then
+      tag=" (exfat)"
+      exfat_idxs+=("$i")
+    fi
+    echo "  [$i] /dev/$name$tag - ${fstype:-unknown} ${label:-} ${size:-} - $mp"
   done
-  read -p "Select mount number to use as MEDIA_ROOT: " sel
-  if ! [[ "$sel" =~ ^[0-9]+$ ]] || [ -z "${candidates[$sel]:-}" ]; then
-    echo "Invalid selection" >&2
-    exit 1
+
+  # If exactly one exfat mount exists, select it automatically
+  if [ ${#exfat_idxs[@]} -eq 1 ]; then
+    sel=${exfat_idxs[0]}
+    echo "Automatically selecting exFAT mount [$sel]" >&2
+    pick=${candidates[$sel]}
+  else
+    read -p "Select mount number to use as MEDIA_ROOT: " sel
+    if ! [[ "$sel" =~ ^[0-9]+$ ]] || [ -z "${candidates[$sel]:-}" ]; then
+      echo "Invalid selection" >&2
+      exit 1
+    fi
+    pick=${candidates[$sel]}
   fi
-  pick=${candidates[$sel]}
 else
   pick=${candidates[0]}
 fi
