@@ -90,7 +90,7 @@ if [ ${#candidates[@]} -eq 0 ] && [ ${#unmounted[@]} -gt 0 ]; then
   # Mount with appropriate options for the filesystem type
   fstype=$(echo "$selected" | sed -n 's/.*FSTYPE="\([^\"]*\)".*/\1/p')
   if [[ "$fstype" == "vfat" || "$fstype" == "exfat" ]]; then
-    sudo mount -o uid=$USER_UID,gid=$USER_GID,umask=0022 "/dev/$dev_name" "$MOUNT_DIR"
+    sudo mount -o uid=$USER_UID,gid=$USER_GID,umask=0000 "/dev/$dev_name" "$MOUNT_DIR"
   else
     sudo mount "/dev/$dev_name" "$MOUNT_DIR"
     sudo chown -R "$USER_NAME:$USER_NAME" "$MOUNT_DIR"
@@ -183,7 +183,7 @@ Type=simple
 User=$USER_NAME
 Environment=MEDIA_ROOT=$MEDIA_ROOT
 WorkingDirectory=$REPO_DIR
-ExecStart=/usr/bin/python3 $REPO_DIR/server.py
+ExecStart=/home/$USER_NAME/.local/bin/gunicorn -w 2 -b 0.0.0.0:5000 server:app
 Restart=always
 
 [Install]

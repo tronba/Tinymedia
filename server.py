@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Lightweight Media Server for Emergency Hub
+Lightweight Media Server
 - Browse folders with arbitrary depth
 - Stream video/audio in browser
 - Download any file
