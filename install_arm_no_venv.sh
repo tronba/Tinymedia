@@ -31,15 +31,65 @@ command -v python3 >/dev/null 2>&1 || {
   fi
 }
 
-echo "Detecting mounted removable USB drives..."
+echo "Detecting removable USB drives..."
 
-# Use lsblk to list removable devices with mountpoints. Include FSTYPE/LABEL/SIZE so choices are informative.
-# Filter for removable devices that have both a filesystem type and are mounted
-mapfile -t candidates < <(lsblk -P -o NAME,RM,FSTYPE,LABEL,MOUNTPOINT,SIZE | awk -F' ' '$0 ~ /RM="1"/ && $0 !~ /FSTYPE=""/ && $0 !~ /MOUNTPOINT=""/ {print $0}')
+# Use lsblk to list removable partitions with a filesystem
+mapfile -t all_removable < <(lsblk -P -o NAME,RM,FSTYPE,LABEL,MOUNTPOINT,SIZE | awk -F' ' '$0 ~ /RM="1"/ && $0 !~ /FSTYPE=""/ {print $0}')
 
-if [ ${#candidates[@]} -eq 0 ]; then
-  echo "No mounted removable USB drives detected. Please mount your USB drive and re-run." >&2
-  echo "Common mount points: /media/$USER_NAME/*  or /mnt/*" >&2
+if [ ${#all_removable[@]} -eq 0 ]; then
+  echo "No removable USB drives with a filesystem detected." >&2
+  exit 1
+fi
+
+# Separate mounted and unmounted drives
+declare -a candidates=()
+declare -a unmounted=()
+
+for entry in "${all_removable[@]}"; do
+  mp=$(echo "$entry" | sed -n 's/.*MOUNTPOINT="\([^"]*\)".*/\1/p')
+  if [ -n "$mp" ]; then
+    candidates+=("$entry")
+  else
+    unmounted+=("$entry")
+  fi
+done
+
+# If no mounted drives but we have unmounted ones, offer to mount
+if [ ${#candidates[@]} -eq 0 ] && [ ${#unmounted[@]} -gt 0 ]; then
+  echo "Found unmounted removable USB drive(s):"
+  for i in "${!unmounted[@]}"; do
+    entry=${unmounted[$i]}
+    name=$(echo "$entry" | sed -n 's/.*NAME="\([^\"]*\)".*/\1/p')
+    fstype=$(echo "$entry" | sed -n 's/.*FSTYPE="\([^\"]*\)".*/\1/p')
+    label=$(echo "$entry" | sed -n 's/.*LABEL="\([^\"]*\)".*/\1/p')
+    size=$(echo "$entry" | sed -n 's/.*SIZE="\([^\"]*\)".*/\1/p')
+    echo "  [$i] /dev/$name - $fstype ${label:-} $size"
+  done
+  
+  if [ ${#unmounted[@]} -eq 1 ]; then
+    sel=0
+  else
+    read -p "Select drive number to mount: " sel
+    if ! [[ "$sel" =~ ^[0-9]+$ ]] || [ -z "${unmounted[$sel]:-}" ]; then
+      echo "Invalid selection" >&2
+      exit 1
+    fi
+  fi
+  
+  selected=${unmounted[$sel]}
+  dev_name=$(echo "$selected" | sed -n 's/.*NAME="\([^\"]*\)".*/\1/p')
+  
+  MOUNT_DIR="/media/$USER_NAME/usb"
+  echo "Mounting /dev/$dev_name to $MOUNT_DIR..."
+  sudo mkdir -p "$MOUNT_DIR"
+  sudo mount "/dev/$dev_name" "$MOUNT_DIR"
+  sudo chown -R "$USER_NAME:$USER_NAME" "$MOUNT_DIR"
+  
+  MEDIA_ROOT="$MOUNT_DIR"
+  echo "Mounted successfully at $MEDIA_ROOT"
+  
+elif [ ${#candidates[@]} -eq 0 ]; then
+  echo "No removable USB drives detected. Please connect a USB drive and re-run." >&2
   exit 1
 fi
 
@@ -75,11 +125,13 @@ if [ ${#candidates[@]} -gt 1 ]; then
     fi
     pick=${candidates[$sel]}
   fi
-else
+elif [ ${#candidates[@]} -eq 1 ]; then
   pick=${candidates[0]}
 fi
 
-MEDIA_ROOT=$(echo "$pick" | sed -n 's/.*MOUNTPOINT="\([^"]*\)".*/\1/p')
+if [ -n "${pick:-}" ]; then
+  MEDIA_ROOT=$(echo "$pick" | sed -n 's/.*MOUNTPOINT="\([^"]*\)".*/\1/p')
+fi
 
 if [ -z "$MEDIA_ROOT" ]; then
   echo "Failed to determine mountpoint." >&2
