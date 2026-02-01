@@ -99,7 +99,7 @@ def get_storage_info() -> dict:
     try:
         stat = os.statvfs(MEDIA_ROOT)
         total = stat.f_blocks * stat.f_frsize
-        free = stat.f_available * stat.f_frsize
+        free = stat.f_bavail * stat.f_frsize
         used = total - free
         return {
             'total': format_size(total),
