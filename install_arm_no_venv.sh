@@ -82,8 +82,19 @@ if [ ${#candidates[@]} -eq 0 ] && [ ${#unmounted[@]} -gt 0 ]; then
   MOUNT_DIR="/media/$USER_NAME/usb"
   echo "Mounting /dev/$dev_name to $MOUNT_DIR..."
   sudo mkdir -p "$MOUNT_DIR"
-  sudo mount "/dev/$dev_name" "$MOUNT_DIR"
-  sudo chown -R "$USER_NAME:$USER_NAME" "$MOUNT_DIR"
+  
+  # Get UID and GID for mount options
+  USER_UID=$(id -u)
+  USER_GID=$(id -g)
+  
+  # Mount with appropriate options for the filesystem type
+  fstype=$(echo "$selected" | sed -n 's/.*FSTYPE="\([^\"]*\)".*/\1/p')
+  if [[ "$fstype" == "vfat" || "$fstype" == "exfat" ]]; then
+    sudo mount -o uid=$USER_UID,gid=$USER_GID,umask=0022 "/dev/$dev_name" "$MOUNT_DIR"
+  else
+    sudo mount "/dev/$dev_name" "$MOUNT_DIR"
+    sudo chown -R "$USER_NAME:$USER_NAME" "$MOUNT_DIR"
+  fi
   
   MEDIA_ROOT="$MOUNT_DIR"
   echo "Mounted successfully at $MEDIA_ROOT"
