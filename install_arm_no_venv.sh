@@ -7,7 +7,7 @@ set -euo pipefail
 # - Performs safety checks to avoid overwriting system mounts
 # - Installs a systemd service `tinymedia` that runs as the invoking user
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 USER_NAME="$(id -un)"
 
 if [ "$EUID" -eq 0 ]; then
