@@ -10,6 +10,15 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 USER_NAME="$(id -un)"
 
+# Non-interactive mode: set AUTO_YES=1 or pass -y / --yes
+AUTO_YES=${AUTO_YES:-0}
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -y|--yes) AUTO_YES=1; shift;;
+    *) echo "Unknown option: $1" >&2; exit 2;;
+  esac
+done
+
 if [ "$EUID" -eq 0 ]; then
   echo "Do NOT run this script as root. Run it as the user that should own the media and service." >&2
   exit 1
@@ -22,7 +31,11 @@ fi
 
 command -v python3 >/dev/null 2>&1 || {
   echo "python3 is required. Installing via apt is recommended on Debian-based systems." >&2
-  read -p "Install python3 and pip3 via apt now? [y/N] " yn
+  if [ "$AUTO_YES" = "1" ]; then
+    yn=Y
+  else
+    read -p "Install python3 and pip3 via apt now? [y/N] " yn
+  fi
   if [[ "$yn" =~ ^[Yy]$ ]]; then
     sudo apt update && sudo apt install -y python3 python3-pip
   else
@@ -68,6 +81,20 @@ if [ ${#candidates[@]} -eq 0 ] && [ ${#unmounted[@]} -gt 0 ]; then
   
   if [ ${#unmounted[@]} -eq 1 ]; then
     sel=0
+  elif [ "$AUTO_YES" = "1" ]; then
+    # In non-interactive mode, pick the sole exfat partition or fail
+    declare -a um_exfat_idxs=()
+    for j in "${!unmounted[@]}"; do
+      um_fs=$(echo "${unmounted[$j]}" | sed -n 's/.*FSTYPE="\([^\"]*\)".*/\1/p')
+      [ "$um_fs" = "exfat" ] && um_exfat_idxs+=("$j")
+    done
+    if [ ${#um_exfat_idxs[@]} -eq 1 ]; then
+      sel=${um_exfat_idxs[0]}
+      echo "AUTO_YES: selecting exFAT partition [${sel}]" >&2
+    else
+      echo "AUTO_YES: expected exactly 1 exFAT partition, found ${#um_exfat_idxs[@]}. Aborting." >&2
+      exit 1
+    fi
   else
     read -p "Select drive number to mount: " sel
     if ! [[ "$sel" =~ ^[0-9]+$ ]] || [ -z "${unmounted[$sel]:-}" ]; then
@@ -129,6 +156,10 @@ if [ ${#candidates[@]} -gt 1 ]; then
     echo "Automatically selecting exFAT mount [$sel]" >&2
     pick=${candidates[$sel]}
   else
+    if [ "$AUTO_YES" = "1" ]; then
+      echo "AUTO_YES: expected exactly 1 exFAT partition, found ${#exfat_idxs[@]}. Aborting." >&2
+      exit 1
+    fi
     read -p "Select mount number to use as MEDIA_ROOT: " sel
     if ! [[ "$sel" =~ ^[0-9]+$ ]] || [ -z "${candidates[$sel]:-}" ]; then
       echo "Invalid selection" >&2
@@ -161,7 +192,11 @@ if ! mountpoint -q -- "$MEDIA_ROOT"; then
 fi
 
 echo "Using MEDIA_ROOT=$MEDIA_ROOT"
-read -p "Proceed and create systemd service 'tinymedia' (runs as $USER_NAME)? [y/N] " yn
+if [ "$AUTO_YES" = "1" ]; then
+  yn=Y
+else
+  read -p "Proceed and create systemd service 'tinymedia' (runs as $USER_NAME)? [y/N] " yn
+fi
 if [[ ! "$yn" =~ ^[Yy]$ ]]; then
   echo "Aborting." >&2
   exit 1

@@ -61,6 +61,23 @@ pip install gunicorn
 gunicorn -w 2 -b 0.0.0.0:5000 server:app
 ```
 
+## Unattended installation
+
+The installer script `install_arm_no_venv.sh` supports a non-interactive mode that auto-answers prompts and will auto-select a single exFAT USB partition when present. Enable it by setting the environment variable `AUTO_YES=1` or by passing `-y` / `--yes` on the command line.
+
+Examples:
+
+```bash
+# env var style
+AUTO_YES=1 bash install_arm_no_venv.sh
+
+# or flag style
+bash install_arm_no_venv.sh --yes
+```
+
+Note: If multiple exFAT partitions are detected, unattended mode will abort to avoid ambiguity. The script still uses `sudo` for system changes; for fully automatic runs, configure passwordless sudo for the invoking user or run from a privileged installer.
+
+
 ## Recommended Media Formats
 
 Pre-transcode for universal browser playback:
