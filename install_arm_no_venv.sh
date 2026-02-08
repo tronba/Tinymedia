@@ -180,6 +180,23 @@ if [ -z "$MEDIA_ROOT" ]; then
   exit 1
 fi
 
+# Get device info for fstab entry (persistent mount across reboots)
+if [ -n "${dev_name:-}" ]; then
+  FSTAB_DEV="/dev/$dev_name"
+else
+  # Find device from mountpoint
+  FSTAB_DEV=$(findmnt -n -o SOURCE "$MEDIA_ROOT" 2>/dev/null || true)
+fi
+
+# Try to get UUID for more reliable fstab entry
+if [ -n "$FSTAB_DEV" ]; then
+  DEV_UUID=$(blkid -s UUID -o value "$FSTAB_DEV" 2>/dev/null || true)
+  DEV_FSTYPE=$(blkid -s TYPE -o value "$FSTAB_DEV" 2>/dev/null || true)
+  echo "Device: $FSTAB_DEV"
+  echo "UUID: ${DEV_UUID:-<not found>}"
+  echo "Filesystem: ${DEV_FSTYPE:-<not found>}"
+fi
+
 # Safety checks
 if [ "$MEDIA_ROOT" = "/" ] || [ "$MEDIA_ROOT" = "/home" ] || [ "$MEDIA_ROOT" = "/boot" ]; then
   echo "Refusing to use core system mountpoint: $MEDIA_ROOT" >&2
@@ -202,24 +219,113 @@ if [[ ! "$yn" =~ ^[Yy]$ ]]; then
   exit 1
 fi
 
+# Add fstab entry for persistent mount across reboots
+if [ -n "${DEV_UUID:-}" ] && [ -n "${DEV_FSTYPE:-}" ]; then
+  # Ensure mount directory exists (needed for fstab to work on reboot)
+  if [ ! -d "$MEDIA_ROOT" ]; then
+    echo "Creating mount directory $MEDIA_ROOT..."
+    sudo mkdir -p "$MEDIA_ROOT"
+  fi
+  
+  # Build mount options based on filesystem type (removed x-systemd.automount for immediate boot mounting)
+  if [[ "$DEV_FSTYPE" == "vfat" || "$DEV_FSTYPE" == "exfat" ]]; then
+    MOUNT_OPTS="nofail,x-systemd.device-timeout=10,uid=$(id -u),gid=$(id -g),umask=0000"
+  else
+    # For ext4, ntfs, etc. - don't use uid/gid/umask
+    MOUNT_OPTS="nofail,x-systemd.device-timeout=10"
+  fi
+  
+  FSTAB_LINE="UUID=$DEV_UUID $MEDIA_ROOT $DEV_FSTYPE $MOUNT_OPTS 0 0"
+  
+  # Check if entry already exists
+  if grep -q "UUID=$DEV_UUID" /etc/fstab 2>/dev/null; then
+    echo "fstab entry for this drive already exists, skipping..."
+  else
+    echo "Adding fstab entry for persistent mount..."
+    echo "$FSTAB_LINE" | sudo tee -a /etc/fstab > /dev/null
+    echo "Added: $FSTAB_LINE"
+    
+    # Reload systemd to recognize new fstab entry
+    echo "Reloading systemd daemon..."
+    sudo systemctl daemon-reload
+    
+    # Verify the mount works by unmounting and remounting via fstab
+    echo "Verifying fstab entry..."
+    if mountpoint -q "$MEDIA_ROOT"; then
+      sudo umount "$MEDIA_ROOT" || true
+    fi
+    
+    if sudo mount "$MEDIA_ROOT" 2>/dev/null; then
+      echo "✓ fstab entry verified successfully"
+    else
+      echo "Warning: fstab mount test failed. Entry was added but may need adjustment." >&2
+    fi
+  fi
+elif [ -n "${FSTAB_DEV:-}" ]; then
+  # Fallback: use device path if UUID not available
+  echo "Warning: UUID not available, using device path $FSTAB_DEV (less reliable)"
+  
+  if [ ! -d "$MEDIA_ROOT" ]; then
+    sudo mkdir -p "$MEDIA_ROOT"
+  fi
+  
+  # Detect filesystem type from the device if not already known
+  if [ -z "${DEV_FSTYPE:-}" ]; then
+    DEV_FSTYPE=$(lsblk -n -o FSTYPE "$FSTAB_DEV" 2>/dev/null || echo "auto")
+  fi
+  
+  if [[ "$DEV_FSTYPE" == "vfat" || "$DEV_FSTYPE" == "exfat" ]]; then
+    MOUNT_OPTS="nofail,x-systemd.device-timeout=10,uid=$(id -u),gid=$(id -g),umask=0000"
+  else
+    MOUNT_OPTS="nofail,x-systemd.device-timeout=10"
+  fi
+  
+  FSTAB_LINE="$FSTAB_DEV $MEDIA_ROOT $DEV_FSTYPE $MOUNT_OPTS 0 0"
+  
+  if ! grep -q "$FSTAB_DEV.*$MEDIA_ROOT" /etc/fstab 2>/dev/null; then
+    echo "Adding fstab entry using device path..."
+    echo "$FSTAB_LINE" | sudo tee -a /etc/fstab > /dev/null
+    echo "Added: $FSTAB_LINE"
+    sudo systemctl daemon-reload
+  fi
+else
+  echo "Error: Could not determine device, UUID, or fstype for fstab entry." >&2
+  echo "The drive will NOT mount automatically after reboot." >&2
+  echo "You will need to manually add an fstab entry or mount the drive." >&2
+  if [ "$AUTO_YES" != "1" ]; then
+    read -p "Continue anyway? [y/N] " cont
+    if [[ ! "$cont" =~ ^[Yy]$ ]]; then
+      exit 1
+    fi
+  fi
+fi
+
 echo "Installing Python dependencies with pip3..."
 python3 -m pip install --upgrade --user --break-system-packages pip
 python3 -m pip install --user --break-system-packages Flask gunicorn
 
 SERVICE_FILE="/etc/systemd/system/tinymedia.service"
 echo "Writing systemd service to $SERVICE_FILE (requires sudo)..."
+
+# Escape MEDIA_ROOT path for systemd (replace / with -)
+MEDIA_ROOT_ESCAPED=$(systemd-escape --path "$MEDIA_ROOT")
+
 sudo bash -c "cat > '$SERVICE_FILE' <<EOF
 [Unit]
 Description=TinyMedia Lightweight Media Server
-After=network.target
+After=network.target local-fs.target ${MEDIA_ROOT_ESCAPED}.mount
+Requires=${MEDIA_ROOT_ESCAPED}.mount
 
 [Service]
 Type=simple
 User=$USER_NAME
 Environment=MEDIA_ROOT=$MEDIA_ROOT
 WorkingDirectory=$REPO_DIR
+ExecStartPre=/bin/sleep 2
+ExecStartPre=/bin/sh -c 'until mountpoint -q $MEDIA_ROOT; do echo Waiting for $MEDIA_ROOT...; sleep 2; done'
 ExecStart=/home/$USER_NAME/.local/bin/gunicorn -w 2 -b 0.0.0.0:5000 server:app
-Restart=always
+Restart=on-failure
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
@@ -231,5 +337,7 @@ sudo systemctl enable tinymedia
 sudo systemctl start tinymedia
 
 echo "Installation complete."
+echo ""
+echo "The USB drive will auto-mount on reboot via fstab."
 echo "Service: sudo systemctl status tinymedia" 
 echo "Open http://<device-ip>:5000 on your phone (same network)."
