@@ -29,8 +29,15 @@ if [[ "$ARCH" != arm* && "$ARCH" != aarch64 ]]; then
   echo "Warning: detected arch $ARCH — this script targets ARM SBCs but will continue." >&2
 fi
 
-command -v python3 >/dev/null 2>&1 || {
-  echo "python3 is required. Installing via apt is recommended on Debian-based systems." >&2
+# Ensure python3 AND pip are available (Armbian ships python3 without pip)
+_need_apt=0
+command -v python3 >/dev/null 2>&1 || _need_apt=1
+if [ "$_need_apt" -eq 0 ] && ! python3 -m pip --version >/dev/null 2>&1; then
+  echo "python3 found but pip module is missing." >&2
+  _need_apt=1
+fi
+if [ "$_need_apt" -eq 1 ]; then
+  echo "python3/pip is required. Installing via apt is recommended on Debian-based systems." >&2
   if [ "$AUTO_YES" = "1" ]; then
     yn=Y
   else
@@ -42,12 +49,34 @@ command -v python3 >/dev/null 2>&1 || {
     echo "Please install python3 and pip3 and re-run." >&2
     exit 1
   fi
-}
+fi
 
 echo "Detecting removable USB drives..."
 
-# Use lsblk to list removable partitions with a filesystem
-mapfile -t all_removable < <(lsblk -P -o NAME,RM,FSTYPE,LABEL,MOUNTPOINT,SIZE | awk -F' ' '$0 ~ /RM="1"/ && $0 !~ /FSTYPE=""/ {print $0}')
+# Some SBCs (e.g. Orange Pi with Allwinner SoCs) report RM="0" for USB drives.
+# Detect USB-transport parent devices so their partitions are accepted as fallback.
+_usb_parents=""
+while IFS= read -r _line; do
+  _dev=$(echo "$_line" | sed -n 's/.*NAME="\([^"]*\)".*/\1/p')
+  _tran=$(echo "$_line" | sed -n 's/.*TRAN="\([^"]*\)".*/\1/p')
+  [ "$_tran" = "usb" ] && _usb_parents="${_usb_parents:+$_usb_parents|}$_dev"
+done < <(lsblk -P -o NAME,TRAN -d 2>/dev/null)
+
+if [ -n "$_usb_parents" ]; then
+  echo "  (USB-transport devices: ${_usb_parents//|/, })"
+fi
+
+# Use lsblk to list partitions with a filesystem that are either removable
+# (RM="1") or on a USB-transport bus (fallback for boards that report RM="0").
+mapfile -t all_removable < <(lsblk -P -o NAME,RM,FSTYPE,LABEL,MOUNTPOINT,SIZE | awk -v usb_re="$_usb_parents" '
+  $0 ~ /FSTYPE=""/ { next }
+  $0 ~ /RM="1"/ { print; next }
+  usb_re != "" {
+    match($0, /NAME="[^"]*"/)
+    n = substr($0, RSTART+6, RLENGTH-7)
+    if (n ~ "^(" usb_re ")") print
+  }
+')
 
 if [ ${#all_removable[@]} -eq 0 ]; then
   echo "No removable USB drives with a filesystem detected." >&2
@@ -189,9 +218,10 @@ else
 fi
 
 # Try to get UUID for more reliable fstab entry
+# Use sudo for blkid — unprivileged blkid returns empty on Armbian
 if [ -n "$FSTAB_DEV" ]; then
-  DEV_UUID=$(blkid -s UUID -o value "$FSTAB_DEV" 2>/dev/null || true)
-  DEV_FSTYPE=$(blkid -s TYPE -o value "$FSTAB_DEV" 2>/dev/null || true)
+  DEV_UUID=$(sudo blkid -s UUID -o value "$FSTAB_DEV" 2>/dev/null || true)
+  DEV_FSTYPE=$(sudo blkid -s TYPE -o value "$FSTAB_DEV" 2>/dev/null || true)
   echo "Device: $FSTAB_DEV"
   echo "UUID: ${DEV_UUID:-<not found>}"
   echo "Filesystem: ${DEV_FSTYPE:-<not found>}"
@@ -301,8 +331,21 @@ else
 fi
 
 echo "Installing Python dependencies with pip3..."
-python3 -m pip install --upgrade --user --break-system-packages pip
-python3 -m pip install --user --break-system-packages Flask gunicorn
+# --break-system-packages is required on Python 3.11+ but absent on older versions
+PIP_BRK=""
+if python3 -m pip install --help 2>&1 | grep -q -- '--break-system-packages'; then
+  PIP_BRK="--break-system-packages"
+fi
+python3 -m pip install --upgrade --user $PIP_BRK pip
+python3 -m pip install --user $PIP_BRK Flask gunicorn
+
+# Resolve gunicorn binary from the pip user-install location
+GUNICORN_BIN="$(python3 -m site --user-base)/bin/gunicorn"
+if [ ! -x "$GUNICORN_BIN" ]; then
+  echo "Warning: gunicorn not found at $GUNICORN_BIN, falling back to PATH lookup" >&2
+  GUNICORN_BIN="$(command -v gunicorn || echo "/home/$USER_NAME/.local/bin/gunicorn")"
+fi
+echo "Gunicorn binary: $GUNICORN_BIN"
 
 SERVICE_FILE="/etc/systemd/system/tinymedia.service"
 echo "Writing systemd service to $SERVICE_FILE (requires sudo)..."
@@ -323,7 +366,7 @@ Environment=MEDIA_ROOT=$MEDIA_ROOT
 WorkingDirectory=$REPO_DIR
 ExecStartPre=/bin/sleep 2
 ExecStartPre=/bin/sh -c 'until mountpoint -q $MEDIA_ROOT; do echo Waiting for $MEDIA_ROOT...; sleep 2; done'
-ExecStart=/home/$USER_NAME/.local/bin/gunicorn -w 2 -b 0.0.0.0:5000 server:app
+ExecStart=$GUNICORN_BIN -w 2 -b 0.0.0.0:5000 server:app
 Restart=on-failure
 RestartSec=10
 
